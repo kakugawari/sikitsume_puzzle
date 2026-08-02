@@ -50,6 +50,9 @@
   let trayCell = 22;  // トレイ表示の 1 マスの px
   let drag = null;    // ドラッグ中の情報
   let toastTimer = 0;
+  let saveTimer = 0;
+  let bestCache = null;   // ベスト記録は毎回 localStorage を読まずに覚えておく
+  let trayFitCount = -1;  // 最後にトレイの収まりを調べたときのピース数
 
   // ------------------------------------------------------------ ちいさな道具
 
@@ -71,6 +74,11 @@
   function formatTime(sec) {
     const s = Math.max(0, Math.floor(sec));
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function bestTimes() {
+    if (!bestCache) bestCache = loadJSON(STORE_BEST, {});
+    return bestCache;
   }
 
   function toast(message) {
@@ -138,6 +146,7 @@
     cell = Math.max(16, Math.min(84, Math.floor(size / state.size)));
     trayCell = Math.max(12, Math.min(30, Math.round(cell * 0.68)));
 
+    trayFitCount = -1;
     els.board.style.gridTemplateColumns = 'repeat(' + state.size + ', ' + cell + 'px)';
     els.board.style.gridAutoRows = cell + 'px';
     document.documentElement.style.setProperty('--cell', cell + 'px');
@@ -362,12 +371,13 @@
     state.elapsed = elapsedSeconds();
 
     const d = difficultyOf(state.diffId);
-    const bests = loadJSON(STORE_BEST, {});
+    const bests = bestTimes();
     const prev = bests[d.id];
     const isBest = state.hints === 0 && (prev === undefined || state.elapsed < prev);
     if (isBest) {
       bests[d.id] = state.elapsed;
       saveJSON(STORE_BEST, bests);
+      bestCache = bests;
     }
 
     els.winDifficulty.textContent = d.name + '（' + d.size + '×' + d.size + '）';
@@ -378,25 +388,70 @@
     els.winOverlay.hidden = false;
     buzz([20, 60, 30]);
     updateStats();
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = 0;
+    }
     storage(function () { localStorage.removeItem(STORE_SAVE); });
   }
 
   // ------------------------------------------------------------ 描画
 
-  function renderTray() {
-    els.tray.textContent = '';
-    const trayPieces = state.pieces
-      .filter(function (p) { return !p.placed; })
-      .sort(function (a, b) { return a.order - b.order; });
-    for (const piece of trayPieces) {
-      const el = pieceEl(piece, trayCell);
-      if (state.selected === piece.id) el.classList.add('is-selected');
-      els.tray.appendChild(el);
-    }
+  /** 作り直しが必要かどうかの目印(形か大きさが変わったときだけ作り直す) */
+  function traySignature(piece) {
+    return P.shapeKey(piece.cells) + '@' + trayCell;
   }
 
-  /** はみ出すならピースを少しずつ小さくして、トレイに全部見えるようにする。 */
+  /**
+   * トレイを描き直す。ピースを 1 つ置くたびに全部作り直すと、
+   * 残りのピース全部の再描画が発生して重いので、変わったぶんだけ入れ替える。
+   */
+  function renderTray() {
+    const wanted = state.pieces
+      .filter(function (p) { return !p.placed; })
+      .sort(function (a, b) { return a.order - b.order; });
+
+    const have = new Map();
+    for (const el of Array.prototype.slice.call(els.tray.children)) {
+      have.set(el.dataset.id, el);
+    }
+
+    let prev = null;
+    for (const piece of wanted) {
+      const key = String(piece.id);
+      let el = have.get(key);
+      have.delete(key);
+      if (el && el.dataset.sig !== traySignature(piece)) {
+        el.remove();
+        el = null;
+      }
+      if (!el) {
+        el = pieceEl(piece, trayCell);
+        el.dataset.sig = traySignature(piece);
+      }
+      el.classList.toggle('is-selected', state.selected === piece.id);
+      // 掴んでいるピースは指の下にいるので、トレイ側は隠しておく
+      el.style.visibility = (drag && drag.moving && drag.piece.id === piece.id) ? 'hidden' : '';
+
+      const shouldFollow = prev ? prev.nextSibling : els.tray.firstChild;
+      if (shouldFollow !== el) els.tray.insertBefore(el, shouldFollow);
+      prev = el;
+    }
+
+    for (const el of have.values()) el.remove();
+  }
+
+  /**
+   * はみ出すならピースを少しずつ小さくして、トレイに全部見えるようにする。
+   * 大きさを測るとレイアウト計算が走るので、ピースが増えたときだけ調べる
+   * (置いたときは減るだけなので、はみ出しようがない)。
+   */
   function fitTray() {
+    const count = els.tray.children.length;
+    const grew = count > trayFitCount;
+    trayFitCount = count;
+    if (!grew) return;
+
     let guard = 0;
     while (els.tray.scrollHeight > els.tray.clientHeight + 1 && trayCell > 12 && guard++ < 14) {
       trayCell = Math.max(12, Math.floor(trayCell * 0.88));
@@ -408,14 +463,30 @@
   function render() {
     if (!state) return;
 
-    els.boardPieces.textContent = '';
+    // 盤面のピースも、変わったものだけ入れ替える
+    const onBoard = new Map();
+    for (const el of Array.prototype.slice.call(els.boardPieces.children)) {
+      onBoard.set(el.dataset.id, el);
+    }
     for (const piece of state.pieces) {
       if (!piece.placed) continue;
+      const key = String(piece.id);
+      const sig = P.shapeKey(piece.cells) + '@' + cell + '@' + piece.placed.x + ',' + piece.placed.y;
+      const found = onBoard.get(key);
+      onBoard.delete(key);
+      if (found && found.dataset.sig === sig) continue;
+      if (found) found.remove();
+
       const el = pieceEl(piece, cell);
       el.classList.add('is-placed');
-      el.style.transform = 'translate(' + piece.placed.x * cell + 'px,' + piece.placed.y * cell + 'px)';
+      el.dataset.sig = sig;
+      // 位置は left/top で決める。transform にすると置いた時のアニメーション
+      // (transform: scale) に上書きされて、ピースが一瞬左上に飛んでしまう。
+      el.style.left = piece.placed.x * cell + 'px';
+      el.style.top = piece.placed.y * cell + 'px';
       els.boardPieces.appendChild(el);
     }
+    for (const el of onBoard.values()) el.remove();
 
     renderTray();
     fitTray();
@@ -432,7 +503,7 @@
     if (!state) return;
     els.statTime.textContent = formatTime(elapsedSeconds());
     els.statLeft.textContent = (state.pieces.length - state.placedCount) + ' / ' + state.pieces.length;
-    const best = loadJSON(STORE_BEST, {})[state.diffId];
+    const best = bestTimes()[state.diffId];
     els.statBest.textContent = best === undefined ? '--:--' : formatTime(best);
   }
 
@@ -456,7 +527,6 @@
 
     drag = {
       piece: piece,
-      source: el,
       fromBoard: !!piece.placed,
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -467,7 +537,9 @@
       moving: false,
       float: null,
       fx: 0,
-      fy: 0
+      fy: 0,
+      rect: boardRect(),  // ドラッグ中は動かないので一度だけ測る
+      ghostKey: ''
     };
 
     window.addEventListener('pointermove', onPointerMove, { passive: false });
@@ -483,7 +555,7 @@
       unplace(piece);
       render();
     } else {
-      drag.source.style.visibility = 'hidden';
+      renderTray();
     }
 
     const float = pieceEl(piece, cell);
@@ -508,30 +580,53 @@
     updateGhost();
   }
 
+  /**
+   * 落とす場所を決める。ぴったりの位置に置けないときは、
+   * 1 マスぶんだけ近くを探して、いちばん近い置ける場所に吸い付かせる。
+   */
   function dropTarget() {
-    const b = boardRect();
-    return {
-      x: Math.round((drag.fx - b.left) / cell),
-      y: Math.round((drag.fy - b.top) / cell)
-    };
+    const b = drag.rect;
+    const rawX = (drag.fx - b.left) / cell;
+    const rawY = (drag.fy - b.top) / cell;
+    const gx = Math.round(rawX);
+    const gy = Math.round(rawY);
+    if (canPlace(drag.piece, gx, gy)) return { x: gx, y: gy, ok: true };
+
+    let best = null;
+    let bestDist = 1.5;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = gx + dx;
+        const y = gy + dy;
+        if (!canPlace(drag.piece, x, y)) continue;
+        const dist = (x - rawX) * (x - rawX) + (y - rawY) * (y - rawY);
+        if (dist < bestDist) {
+          bestDist = dist;
+          best = { x: x, y: y, ok: true };
+        }
+      }
+    }
+    return best || { x: gx, y: gy, ok: false };
   }
 
   function updateGhost() {
     const piece = drag.piece;
-    const target = dropTarget();
-    const b = boardRect();
+    const b = drag.rect;
     const nearBoard =
       drag.fx > b.left - cell * 2 && drag.fx < b.right + cell &&
       drag.fy > b.top - cell * 2 && drag.fy < b.bottom + cell;
+    const target = nearBoard ? dropTarget() : null;
+
+    // 見た目が変わらないときは DOM をさわらない(ドラッグ中は毎フレーム呼ばれる)
+    const key = target ? target.x + ',' + target.y + ',' + target.ok : '';
+    if (key === drag.ghostKey) return;
+    drag.ghostKey = key;
 
     els.ghost.textContent = '';
-    els.ghost.classList.remove('bad');
-    if (!nearBoard) return;
+    els.ghost.classList.toggle('bad', !!target && !target.ok);
+    if (!target) return;
 
-    const ok = canPlace(piece, target.x, target.y);
     els.ghost.style.color = piece.color;
-    if (!ok) els.ghost.classList.add('bad');
-
     for (const c of piece.cells) {
       const x = target.x + c[0];
       const y = target.y + c[1];
@@ -557,14 +652,13 @@
     const fromBoard = drag.fromBoard;
 
     if (drag.float) drag.float.remove();
-    if (drag.source) drag.source.style.visibility = '';
     els.ghost.textContent = '';
     els.ghost.classList.remove('bad');
 
     let placedNow = false;
     if (wasMoving) {
       const target = dropTarget();
-      if (canPlace(piece, target.x, target.y)) {
+      if (target.ok) {
         place(piece, target.x, target.y);
         placedNow = true;
         buzz(12);
@@ -598,7 +692,23 @@
 
   // ------------------------------------------------------------ 途中経過の保存
 
+  /**
+   * 途中経過の保存。localStorage への書き込みは同期処理なので、
+   * 操作のたびに書かず、少し待ってからまとめて書く。
+   */
   function save() {
+    if (saveTimer) return;
+    saveTimer = setTimeout(function () {
+      saveTimer = 0;
+      saveNow();
+    }, 500);
+  }
+
+  function saveNow() {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = 0;
+    }
     if (!state) return;
     if (state.won) return;
     saveJSON(STORE_SAVE, {
@@ -697,8 +807,9 @@
     });
 
     document.addEventListener('visibilitychange', function () {
-      if (document.hidden) save();
+      if (document.hidden) saveNow();
     });
+    window.addEventListener('pagehide', saveNow);
 
     // 画面のピンチズームや長押しメニューを抑える
     document.addEventListener('gesturestart', function (e) { e.preventDefault(); });
@@ -709,7 +820,7 @@
     setInterval(function () {
       if (state && !state.won) updateStats();
     }, 500);
-    setInterval(save, 5000);
+    setInterval(saveNow, 15000);
   }
 
   function registerServiceWorker() {
