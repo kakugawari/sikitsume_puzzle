@@ -1,0 +1,28 @@
+{
+  "name": "しきつめパズル",
+  "short_name": "しきつめ",
+  "description": "正方形のわくにピースを敷き詰めるパズル。問題は自動生成され、かならず解けます。",
+  "lang": "ja",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#10142a",
+  "theme_color": "#151a2e",
+  "categories": ["games", "puzzle"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

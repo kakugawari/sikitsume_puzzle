@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="しきつめパズル">
+  <rect width="512" height="512" fill="#151a2e"/>
+  <g fill="#ef476f">
+    <rect x="121.1" y="121.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="190.1" y="121.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="121.1" y="190.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="190.1" y="190.1" width="62.8" height="62.8" rx="10.0"/>
+  </g>
+  <g fill="#ffd166">
+    <rect x="259.1" y="121.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="328.1" y="121.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="328.1" y="190.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="328.1" y="259.1" width="62.8" height="62.8" rx="10.0"/>
+  </g>
+  <g fill="#06d6a0">
+    <rect x="259.1" y="190.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="259.1" y="259.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="259.1" y="328.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="328.1" y="328.1" width="62.8" height="62.8" rx="10.0"/>
+  </g>
+  <g fill="#4cc9f0">
+    <rect x="121.1" y="259.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="190.1" y="259.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="121.1" y="328.1" width="62.8" height="62.8" rx="10.0"/>
+    <rect x="190.1" y="328.1" width="62.8" height="62.8" rx="10.0"/>
+  </g>
+</svg>

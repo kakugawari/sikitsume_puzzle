@@ -1,0 +1,11 @@
+{
+  "name": "sikitsume-puzzle",
+  "version": "1.0.0",
+  "description": "正方形のわくにピースを敷き詰めるパズル (PWA)",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/puzzle.test.js",
+    "start": "node scripts/serve.js"
+  },
+  "license": "MIT"
+}

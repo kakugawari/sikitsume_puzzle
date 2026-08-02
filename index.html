@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>しきつめパズル</title>
+<meta name="description" content="正方形のわくにピースを敷き詰めるパズル。問題は毎回自動生成されるので、必ず解けます。">
+<meta name="theme-color" content="#151a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="しきつめ">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon.svg">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="topbar">
+    <h1 class="title">しきつめパズル</h1>
+
+    <div class="stats">
+      <div class="stat"><span class="stat-label">タイム</span><span class="stat-value" id="statTime">0:00</span></div>
+      <div class="stat"><span class="stat-label">のこり</span><span class="stat-value" id="statLeft">-</span></div>
+      <div class="stat"><span class="stat-label">ベスト</span><span class="stat-value" id="statBest">--:--</span></div>
+    </div>
+
+    <div class="topbar-actions">
+      <label class="select-wrap">
+        <span class="sr-only">むずかしさ</span>
+        <select id="difficulty" aria-label="むずかしさ"></select>
+      </label>
+      <button type="button" id="btnNew" class="btn btn-primary">新しい問題</button>
+      <button type="button" id="btnHelp" class="btn btn-icon" aria-label="あそびかた" title="あそびかた">?</button>
+    </div>
+  </header>
+
+  <main id="boardWrap">
+    <div id="boardStage">
+      <div id="board" role="application" aria-label="パズルの盤面"></div>
+      <div id="ghost" aria-hidden="true"></div>
+      <div id="boardPieces"></div>
+    </div>
+  </main>
+
+  <footer id="trayWrap">
+    <div class="tray-bar">
+      <div class="tray-tools">
+        <button type="button" id="btnRotate" class="btn btn-tool" title="回転 (R)"><span aria-hidden="true">↻</span> 回転</button>
+        <button type="button" id="btnFlip" class="btn btn-tool" title="反転 (F)"><span aria-hidden="true">⇄</span> 反転</button>
+      </div>
+      <div class="tray-tools">
+        <button type="button" id="btnUndo" class="btn btn-tool" title="ひとつ戻す (U)">戻す</button>
+        <button type="button" id="btnHint" class="btn btn-tool" title="ヒント (H)">ヒント</button>
+        <button type="button" id="btnReset" class="btn btn-tool" title="全部はずす">やり直し</button>
+      </div>
+    </div>
+    <div id="tray" aria-label="のこりのピース"></div>
+  </footer>
+
+</div>
+
+<div id="dragLayer" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<div id="winOverlay" class="overlay" hidden>
+  <div class="panel">
+    <div class="win-emoji" aria-hidden="true">🎉</div>
+    <h2>クリア！</h2>
+    <p class="win-detail"><span id="winDifficulty"></span> を <b id="winTime"></b> でクリア</p>
+    <p class="win-sub" id="winSub"></p>
+    <div class="panel-actions">
+      <button type="button" id="btnNext" class="btn btn-primary">つぎの問題</button>
+      <button type="button" id="btnStay" class="btn">とじる</button>
+    </div>
+  </div>
+</div>
+
+<div id="helpOverlay" class="overlay" hidden>
+  <div class="panel panel-left">
+    <h2>あそびかた</h2>
+    <ol class="help-list">
+      <li>下のピースを<b>ドラッグ</b>して、正方形のわくに置きます。</li>
+      <li>ピースを<b>タップ(クリック)</b>すると選択、もう一度タップで<b>回転</b>します。</li>
+      <li>選択中のピースは <b>回転</b> / <b>反転</b> ボタンでも向きを変えられます。</li>
+      <li>置いたピースはタップで手もとに戻せます。ドラッグで置き直しもできます。</li>
+      <li>わくをすき間なく埋めたらクリアです。</li>
+    </ol>
+    <p class="help-note">問題は毎回その場で作られ、<b>かならず解ける</b>ようになっています。</p>
+    <p class="help-note">キーボード: <b>R</b> 回転 / <b>F</b> 反転 / <b>U</b> 戻す / <b>H</b> ヒント / <b>N</b> 新しい問題</p>
+    <div class="panel-actions">
+      <button type="button" id="btnHelpClose" class="btn btn-primary">とじる</button>
+    </div>
+  </div>
+</div>
+
+<script src="./src/puzzle.js"></script>
+<script src="./src/game.js"></script>
+</body>
+</html>
