@@ -314,6 +314,9 @@
 
     // 解答の 1 ピース分の領域が、すでに 1 個のピースでぴったり埋まっているか。
     // どのピースもマス数は同じなので、全マスが同じ id なら「ぴったり」で確定する。
+    const absKey = function (cells) {
+      return cells.map(function (c) { return c[0] + ',' + c[1]; }).sort().join(' ');
+    };
     const solvedRegion = function (cells) {
       const id = state.board[cells[0][1] * state.size + cells[0][0]];
       if (id === -1) return false;
@@ -341,14 +344,26 @@
       if (id !== -1) unplace(pieceById(id));
     }
 
-    const shape = P.normalize(target);
-    const key = P.shapeKey(shape);
+    const key = P.shapeKey(P.normalize(target));
     const ox = Math.min.apply(null, target.map(function (c) { return c[0]; }));
     const oy = Math.min.apply(null, target.map(function (c) { return c[1]; }));
 
-    const piece = state.pieces.find(function (p) {
-      return !p.placed && P.orientations(p.cells).some(function (f) { return P.shapeKey(f) === key; });
-    });
+    const fits = function (p) {
+      return P.orientations(p.cells).some(function (f) { return P.shapeKey(f) === key; });
+    };
+
+    // 手もとから探す。無ければ、まちがった場所に置いてあるものを回収する
+    // (必要なピースが盤面の別の場所にあると、ヒントが出せなくなってしまうため)。
+    let piece = state.pieces.find(function (p) { return !p.placed && fits(p); });
+    if (!piece) {
+      const answers = new Set(state.pieces.map(function (p) { return absKey(p.solutionCells); }));
+      piece = state.pieces.find(function (p) {
+        if (!p.placed || !fits(p)) return false;
+        const covers = p.cells.map(function (c) { return [p.placed.x + c[0], p.placed.y + c[1]]; });
+        return !answers.has(absKey(covers));   // 正しい場所のピースは動かさない
+      });
+      if (piece) unplace(piece);
+    }
     if (!piece) { toast('ヒントを出せませんでした'); return; }
 
     piece.cells = P.orientations(piece.cells).find(function (f) { return P.shapeKey(f) === key; });
@@ -841,6 +856,8 @@
       state: function () { return state; },
       cellSize: function () { return cell; },
       canPlace: canPlace,
+      place: place,
+      hint: hint,
       newGame: newGame
     };
   }
