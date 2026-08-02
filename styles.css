@@ -156,6 +156,11 @@ body {
 
 .btn-tool { padding: 8px 10px; }
 
+.btn-tool.is-armed {
+  border-color: var(--sel);
+  box-shadow: 0 0 0 1px var(--sel);
+}
+
 .btn-tool.is-on {
   background: var(--accent);
   border-color: transparent;
@@ -209,7 +214,9 @@ select {
   pointer-events: none;
 }
 
-#boardPieces { pointer-events: auto; }
+/* ピースのマス目だけが反応する。盤面の空きマスへのタップは
+   下の #board に届き、選択を外すのに使える。 */
+#boardPieces { pointer-events: none; }
 
 #ghost .gcell {
   position: absolute;
@@ -249,7 +256,6 @@ select {
     inset 0 -2px 0 rgba(0, 0, 0, .12);
 }
 
-.piece.is-selected { filter: drop-shadow(0 0 0 2px var(--text)) drop-shadow(0 2px 6px rgba(0, 0, 0, .4)); }
 .piece.is-dragging { cursor: grabbing; }
 .piece.is-placed { filter: none; }
 
@@ -266,6 +272,13 @@ select {
 @keyframes glow {
   0%, 100% { filter: none; }
   50%      { filter: brightness(1.5) drop-shadow(0 0 8px var(--c)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tray .slot.is-selected,
+  .piece.just-placed,
+  .piece.is-hinted { animation: none; }
+  * { transition-duration: .01ms !important; }
 }
 
 /* ------------------------------------------------------------------ トレイ */
@@ -302,6 +315,40 @@ select {
   overflow-x: hidden;
   padding: 4px 2px;
   touch-action: pan-y;
+}
+
+/* ピースを入れる正方形のマス目。回しても大きさが変わらないので、
+   回転させてもトレイの並びがずれない。選ぶとここが光る。 */
+#tray .slot {
+  position: relative;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  touch-action: none;
+  cursor: grab;
+}
+
+#tray .slot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--c);
+  opacity: 0;
+  transition: opacity .16s ease;
+}
+
+#tray .slot.is-selected::before { opacity: .16; }
+
+#tray .slot.is-selected {
+  box-shadow: inset 0 0 0 2px var(--c), 0 0 12px -2px var(--c);
+  animation: selected-glow 1.8s ease-in-out infinite;
+}
+
+@keyframes selected-glow {
+  0%, 100% { box-shadow: inset 0 0 0 2px var(--c), 0 0 8px -3px var(--c); }
+  50%      { box-shadow: inset 0 0 0 2px var(--c), 0 0 18px 0 var(--c); }
 }
 
 #tray .piece {

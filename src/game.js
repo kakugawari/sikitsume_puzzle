@@ -38,6 +38,8 @@
     statLeft: $('statLeft'),
     statBest: $('statBest'),
     difficulty: $('difficulty'),
+    btnRotate: $('btnRotate'),
+    btnFlip: $('btnFlip'),
     winOverlay: $('winOverlay'),
     winTime: $('winTime'),
     winDifficulty: $('winDifficulty'),
@@ -71,6 +73,10 @@
     storage(function () { localStorage.setItem(key, JSON.stringify(value)); });
   }
 
+  function clamp(v, lo, hi) {
+    return v < lo ? lo : (v > hi ? hi : v);
+  }
+
   function formatTime(sec) {
     const s = Math.max(0, Math.floor(sec));
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -86,6 +92,10 @@
     els.toast.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { els.toast.classList.remove('show'); }, 1600);
+  }
+
+  function reducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   }
 
   function buzz(ms) {
@@ -288,23 +298,41 @@
 
   // ------------------------------------------------------------ 向きを変える
 
-  function reorient(piece, transform) {
+  /**
+   * 向きを変える。新しい向きで描いたあと、直前の向きから動いてきたように
+   * 見せる (回転なら逆向きに 90 度回した状態から戻す)。
+   * 先に状態を変えてしまうので、続けて何度たたいても取りこぼさない。
+   */
+  function reorient(piece, transform, from) {
     if (piece.placed) unplace(piece);
     piece.cells = transform(piece.cells);
     render();
     save();
+    buzz(8);
+
+    if (reducedMotion()) return;
+    const el = els.tray.querySelector('.slot[data-id="' + piece.id + '"] .piece');
+    if (!el || !el.animate) return;
+    el.animate(
+      [{ transform: from }, { transform: 'none' }],
+      { duration: 160, easing: 'ease-out' }
+    );
+  }
+
+  function selectedPiece() {
+    return state.selected !== null ? pieceById(state.selected) : null;
   }
 
   function rotateSelected() {
-    const piece = state.selected !== null ? pieceById(state.selected) : null;
+    const piece = selectedPiece();
     if (!piece) { toast('ピースをえらんでね'); return; }
-    reorient(piece, P.rotate);
+    reorient(piece, P.rotate, 'rotate(-90deg)');
   }
 
   function flipSelected() {
-    const piece = state.selected !== null ? pieceById(state.selected) : null;
+    const piece = selectedPiece();
     if (!piece) { toast('ピースをえらんでね'); return; }
-    reorient(piece, P.flip);
+    reorient(piece, P.flip, 'scaleX(-1)');
   }
 
   // ------------------------------------------------------------ ヒント
@@ -418,8 +446,14 @@
   }
 
   /**
-   * トレイを描き直す。ピースを 1 つ置くたびに全部作り直すと、
-   * 残りのピース全部の再描画が発生して重いので、変わったぶんだけ入れ替える。
+   * トレイを描き直す。
+   *
+   * ピースは正方形のマス目 (.slot) の中に入れて置く。回しても反転しても
+   * マス目の大きさは変わらないので、回転させたときにトレイ全体が
+   * 並び替わって、指の下からピースが逃げてしまうことがない。
+   * 選んでいるピースはこのマス目を光らせて示す。
+   *
+   * 描き直しは変わったぶんだけ入れ替える(1 つ置くたびに全部作り直すと重い)。
    */
   function renderTray() {
     const wanted = state.pieces
@@ -434,26 +468,47 @@
     let prev = null;
     for (const piece of wanted) {
       const key = String(piece.id);
-      let el = have.get(key);
+      let slot = have.get(key);
       have.delete(key);
-      if (el && el.dataset.sig !== traySignature(piece)) {
-        el.remove();
-        el = null;
+      if (!slot) {
+        slot = document.createElement('div');
+        slot.className = 'slot';
+        slot.dataset.id = key;
       }
-      if (!el) {
-        el = pieceEl(piece, trayCell);
-        el.dataset.sig = traySignature(piece);
+
+      // 回転しても変わらない大きさ = 縦横の長いほう
+      const span = Math.max(P.width(piece.cells), P.height(piece.cells)) * trayCell;
+      slot.style.width = span + 'px';
+      slot.style.height = span + 'px';
+      slot.style.setProperty('--c', piece.color);
+      slot.classList.toggle('is-selected', state.selected === piece.id);
+
+      let inner = slot.firstElementChild;
+      if (!inner || inner.dataset.sig !== traySignature(piece)) {
+        if (inner) inner.remove();
+        inner = pieceEl(piece, trayCell);
+        inner.dataset.sig = traySignature(piece);
+        slot.appendChild(inner);
       }
-      el.classList.toggle('is-selected', state.selected === piece.id);
       // 掴んでいるピースは指の下にいるので、トレイ側は隠しておく
-      el.style.visibility = (drag && drag.moving && drag.piece.id === piece.id) ? 'hidden' : '';
+      inner.style.visibility = (drag && drag.moving && drag.piece.id === piece.id) ? 'hidden' : '';
 
       const shouldFollow = prev ? prev.nextSibling : els.tray.firstChild;
-      if (shouldFollow !== el) els.tray.insertBefore(el, shouldFollow);
-      prev = el;
+      if (shouldFollow !== slot) els.tray.insertBefore(slot, shouldFollow);
+      prev = slot;
     }
 
     for (const el of have.values()) el.remove();
+  }
+
+  /** 回転・反転ボタンの状態を、選んでいるピースに合わせる。 */
+  function updateTools() {
+    const piece = state.selected !== null ? pieceById(state.selected) : null;
+    for (const btn of [els.btnRotate, els.btnFlip]) {
+      btn.disabled = !piece;
+      btn.classList.toggle('is-armed', !!piece);
+      btn.style.setProperty('--sel', piece ? piece.color : 'transparent');
+    }
   }
 
   /**
@@ -468,8 +523,8 @@
     if (!grew) return;
 
     let guard = 0;
-    while (els.tray.scrollHeight > els.tray.clientHeight + 1 && trayCell > 12 && guard++ < 14) {
-      trayCell = Math.max(12, Math.floor(trayCell * 0.88));
+    while (els.tray.scrollHeight > els.tray.clientHeight + 1 && trayCell > 10 && guard++ < 16) {
+      trayCell = Math.max(10, Math.floor(trayCell * 0.88));
       document.documentElement.style.setProperty('--tray-cell', trayCell + 'px');
       renderTray();
     }
@@ -505,6 +560,7 @@
 
     renderTray();
     fitTray();
+    updateTools();
     updateStats();
   }
 
@@ -531,8 +587,11 @@
   function onPointerDown(e) {
     if (!state || state.won) return;
     if (e.button !== undefined && e.button !== 0) return;
-    const el = e.target.closest ? e.target.closest('.piece') : null;
-    if (!el || drag) return;
+    if (drag || !e.target.closest) return;
+    // トレイでは、まわりの余白 (.slot) を触ってもそのピースを掴めるようにする
+    const slot = e.target.closest('.slot');
+    const el = slot ? slot.querySelector('.piece') : e.target.closest('.piece');
+    if (!el) return;
     const piece = pieceById(el.dataset.id);
     if (!piece) return;
 
@@ -546,8 +605,8 @@
       pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
-      offX: (e.clientX - rect.left) / scale,
-      offY: (e.clientY - rect.top) / scale,
+      offX: clamp((e.clientX - rect.left) / scale, 0, P.width(piece.cells) * cell),
+      offY: clamp((e.clientY - rect.top) / scale, 0, P.height(piece.cells) * cell),
       lift: e.pointerType === 'touch' ? cell * 1.1 : 0,
       moving: false,
       float: null,
@@ -688,7 +747,7 @@
         unplace(piece);
         state.selected = piece.id;
       } else if (state.selected === piece.id) {
-        piece.cells = P.rotate(piece.cells);
+        reorient(piece, P.rotate, 'rotate(-90deg)');
       } else {
         state.selected = piece.id;
       }
@@ -791,13 +850,15 @@
     els.tray.addEventListener('pointerdown', onPointerDown);
     els.boardPieces.addEventListener('pointerdown', onPointerDown);
 
-    // 盤面の何もないところをタップしたら選択解除
-    els.board.addEventListener('pointerdown', function () {
-      if (state && state.selected !== null) {
-        state.selected = null;
-        render();
-      }
-    });
+    // 盤面やトレイの何もないところをタップしたら選択解除
+    const deselect = function (e) {
+      if (!state || state.selected === null) return;
+      if (e.target.closest('.piece') || e.target.closest('.slot')) return;
+      state.selected = null;
+      render();
+    };
+    els.board.addEventListener('pointerdown', deselect);
+    els.tray.addEventListener('pointerdown', deselect);
 
     document.addEventListener('keydown', function (e) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
