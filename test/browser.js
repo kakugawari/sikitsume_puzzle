@@ -268,19 +268,49 @@ async function run() {
       `でたらめに置いた状態からでも、ヒントだけで必ず最後まで解ける (25 局面${stuck.length ? ': ' + stuck.join(', ') : ''})`);
 
     // ------------------------------------------------ 画面の収まり
+    // 開いた直後、盤面が上下のバーに重なっていたことがある。
+    // 原因はトレイを描く前に高さを測っていたこと (トレイが伸びると盤面がはみ出す)。
     section('画面の収まり');
-    for (const diff of ['normal', 'oni']) {
-      await phone.evaluate((d) => window.__sikitsume.newGame(d), diff);
-      await phone.waitForTimeout(250);
-      const fit = await phone.evaluate(() => ({
+    const boxes = () => phone.evaluate(() => {
+      const r = (sel) => {
+        const b = document.querySelector(sel).getBoundingClientRect();
+        return { top: b.top, bottom: b.bottom, height: b.height };
+      };
+      return {
+        diff: window.__sikitsume.state().diffId,
+        cell: window.__sikitsume.cellSize(),
+        board: r('#board'),
+        topbar: r('#topbar'),
+        toolbar: r('.tray-bar'),
+        room: document.getElementById('boardWrap').clientHeight - 24,
         wide: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        boardIn: document.getElementById('board').getBoundingClientRect().bottom < window.innerHeight,
-        trayOver: document.getElementById('tray').scrollHeight - document.getElementById('tray').clientHeight,
-        shown: document.querySelectorAll('#tray .slot').length
-      }));
-      ok(fit.wide <= 1, `${diff}: 横スクロールが出ない`);
-      ok(fit.boardIn, `${diff}: 盤面が画面に収まる`);
-      ok(fit.trayOver <= 0, `${diff}: ピース ${fit.shown} 個がトレイに収まる`);
+        trayOver: document.getElementById('tray').scrollHeight - document.getElementById('tray').clientHeight
+      };
+    });
+
+    for (const diff of ['practice', 'easy', 'normal', 'hard', 'oni']) {
+      for (const how of ['切り替え', '開き直し']) {
+        await phone.evaluate((d) => window.__sikitsume.newGame(d), diff);
+        await phone.waitForTimeout(250);
+        if (how === '開き直し') {
+          // アプリを閉じて開き直した状態 (この経路で盤面がはみ出していた)
+          await phone.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+          await phone.goto(URL);
+          await phone.waitForFunction(() => window.__sikitsume);
+          await phone.waitForTimeout(300);
+        }
+        const m = await boxes();
+        const overTop = Math.round(m.topbar.bottom - m.board.top);
+        const overBottom = Math.round(m.board.bottom - m.toolbar.top);
+        ok(overTop <= 0 && overBottom <= 0,
+          `${m.diff}/${how}: 盤面が上下のバーに重ならない` +
+          (overTop > 0 || overBottom > 0 ? ` (上${Math.max(0, overTop)}px 下${Math.max(0, overBottom)}px)` : ''));
+        ok(m.wide <= 1, `${m.diff}/${how}: 横スクロールが出ない`);
+        ok(m.trayOver <= 0, `${m.diff}/${how}: ピースがトレイに収まる`);
+        // 小さすぎても遊びにくいので、使える場所の 8 割は使えていること
+        ok(m.board.height >= m.room * 0.8,
+          `${m.diff}/${how}: 盤面が場所を活かせている (${Math.round(m.board.height)}px / ${m.room}px)`);
+      }
     }
 
     // ------------------------------------------------ 続きから

@@ -147,20 +147,82 @@
 
   // ------------------------------------------------------------ レイアウト
 
-  function layout() {
-    if (!state) return;
-    const pad = 24;
-    const w = els.boardWrap.clientWidth - pad;
-    const h = els.boardWrap.clientHeight - pad;
-    const size = Math.min(w, h);
-    cell = Math.max(16, Math.min(84, Math.floor(size / state.size)));
+  /** 決めたマスの大きさを画面に反映する。 */
+  function applyCell() {
     trayCell = Math.max(12, Math.min(30, Math.round(cell * 0.68)));
-
     trayFitCount = -1;
     els.board.style.gridTemplateColumns = 'repeat(' + state.size + ', ' + cell + 'px)';
     els.board.style.gridAutoRows = cell + 'px';
     document.documentElement.style.setProperty('--cell', cell + 'px');
     document.documentElement.style.setProperty('--tray-cell', trayCell + 'px');
+  }
+
+  /** 盤面に使える高さ (入れ物の余白を引いたもの)。 */
+  function boardRoom() {
+    const pad = 24;
+    return {
+      w: els.boardWrap.clientWidth - pad,
+      h: els.boardWrap.clientHeight - pad
+    };
+  }
+
+  /**
+   * 盤面とトレイの大きさを決める。
+   *
+   * トレイの高さが決まらないと盤面に使える高さが分からない。
+   * 先に盤面を決めると、あとからトレイが伸びて盤面がはみ出す
+   * (実際、開いた直後は盤面が上下のバーに重なっていた)。
+   * そこで「トレイを先に確定 → 残りに合わせて盤面 → 実測してはみ出しを詰める」の順で決める。
+   */
+  function layout() {
+    if (!state) return;
+
+    // 1. いまのマスの大きさでトレイを描き、高さを確定させる
+    renderTray();
+    fitTray();
+
+    // 2. 残った場所に合わせて盤面のマスを決める
+    const room = boardRoom();
+    cell = Math.max(12, Math.min(84, Math.floor(Math.min(room.w, room.h) / state.size)));
+    applyCell();
+
+    // 3. マスが変わるとトレイのピースの大きさも変わるので、もう一度整える
+    renderTray();
+    fitTray();
+
+    // 4. 実際に測って、収まる中でいちばん大きいマスに合わせる。
+    //    マスを変えるとトレイの高さも変わるので、そのつど測り直す。
+    // 枠線もふくめた実際の大きさで判定する
+    const fits = function () {
+      const now = boardRoom();
+      const box = els.board.getBoundingClientRect();
+      return box.width <= now.w && box.height <= now.h;
+    };
+
+    let guard = 0;
+    while (cell > 12 && !fits() && guard++ < 40) {
+      cell--;
+      applyCell();
+      renderTray();
+      fitTray();
+    }
+
+    // トレイが縮んで空いた分だけ、盤面を大きくできることがある
+    guard = 0;
+    while (cell < 84 && guard++ < 40) {
+      const prev = cell;
+      cell++;
+      applyCell();
+      renderTray();
+      fitTray();
+      if (!fits()) {
+        cell = prev;
+        applyCell();
+        renderTray();
+        fitTray();
+        break;
+      }
+    }
   }
 
   function buildBoard() {
