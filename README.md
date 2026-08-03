@@ -90,7 +90,8 @@ src/puzzle.js           問題生成・ポリオミノの回転/反転(ブラウ
 src/game.js             操作・描画・保存
 test/puzzle.test.js     問題生成のテスト
 scripts/serve.js        開発用の静的サーバー
-sw.js, manifest.webmanifest, icon*.svg   PWA まわり
+scripts/make-icons.js   アイコンを作り直す (絵を変えたときだけ)
+sw.js, manifest.webmanifest, icon*        PWA まわり
 ```
 
 ## ライセンス
