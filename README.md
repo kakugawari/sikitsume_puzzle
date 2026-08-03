@@ -53,8 +53,9 @@ HTTPS で公開したページを開き、ブラウザのメニューから
 
 ### GitHub Pages で公開する
 
-リポジトリの **Settings → Pages → Source** を **GitHub Actions** にすると、
-`main` へ push するたびに `.github/workflows/pages.yml` が公開してくれます。
+**Settings → Pages → Source** を **Deploy from a branch** にして、
+公開したいブランチと `/ (root)` を選ぶだけです。ビルドが要らないので、
+push するたびに GitHub がそのまま配信してくれます。
 
 ## テスト
 

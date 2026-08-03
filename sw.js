@@ -33,19 +33,20 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (new URL(request.url).origin !== self.location.origin) return;
 
-  // キャッシュ優先。裏で更新を取りにいく。
+  // つながっていれば最新を取りにいき、取れたぶんを控えておく。
+  // つながらないときだけ控えを使う(こうしないと、更新した直後に
+  // 古いままの画面が出てしまう)。
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const fresh = fetch(request)
-        .then((response) => {
-          if (response && response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || fresh;
-    })
+    fetch(request)
+      .then((response) => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(request, copy));
+        }
+        return response;
+      })
+      .catch(() => caches.match(request).then((cached) => {
+        return cached || Response.error();
+      }))
   );
 });
