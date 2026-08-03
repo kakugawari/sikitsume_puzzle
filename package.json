@@ -5,7 +5,9 @@
   "private": true,
   "scripts": {
     "test": "node --test test/puzzle.test.js",
-    "start": "node scripts/serve.js"
+    "test:ui": "node test/browser.js",
+    "start": "node scripts/serve.js",
+    "icons": "node scripts/make-icons.js"
   },
   "license": "MIT"
 }
