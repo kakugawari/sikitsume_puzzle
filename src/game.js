@@ -83,7 +83,15 @@
   }
 
   function bestTimes() {
-    if (!bestCache) bestCache = loadJSON(STORE_BEST, {});
+    if (!bestCache) {
+      // 以前、クリア時間が必ず 0 秒として記録される不具合があった。
+      // 0 秒の記録は二度と更新できないので、読み込むときに捨てる。
+      const stored = loadJSON(STORE_BEST, {});
+      bestCache = {};
+      for (const key of Object.keys(stored)) {
+        if (typeof stored[key] === 'number' && stored[key] >= 1) bestCache[key] = stored[key];
+      }
+    }
     return bestCache;
   }
 
@@ -472,8 +480,11 @@
 
   function checkWin() {
     if (state.won || state.placedCount !== state.pieces.length) return;
-    state.won = true;
+    // かかった時間は won を立てる前に確定させる。
+    // elapsedSeconds() は「クリア済みなら止まった時間を返す」ので、
+    // 順番を逆にすると、いつクリアしても 0 秒になってしまう。
     state.elapsed = elapsedSeconds();
+    state.won = true;
 
     const d = difficultyOf(state.diffId);
     const bests = bestTimes();

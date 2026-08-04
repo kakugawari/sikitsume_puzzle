@@ -329,6 +329,69 @@ async function run() {
     ok(back.seed === seed && back.placed === 1 && back.diff === 'hard',
       'リロードしても同じ問題の続きから遊べる');
 
+    // ------------------------------------------------ タイムとベスト
+    // クリア時間が必ず 0 秒として記録される不具合があった
+    // (won を立ててから経過時間を求めていたため)。
+    section('タイムとベスト');
+    await phone.evaluate(() => {
+      localStorage.clear();
+      // 壊れた記録が残っている端末を想定して入れておく
+      localStorage.setItem('sikitsume.best.v1', JSON.stringify({ practice: 0 }));
+    });
+    await phone.goto(URL);
+    await phone.waitForFunction(() => window.__sikitsume);
+    await phone.evaluate(() => window.__sikitsume.newGame('practice'));
+    await phone.waitForTimeout(250);
+    ok(await phone.textContent('#statBest') === '--:--', '0 秒という記録は無かったことにする');
+
+    // ヒントを使わずに、最後の 1 つ以外を正解の位置に置く
+    await phone.evaluate(() => {
+      const S = window.__sikitsume;
+      const st = S.state();
+      for (const piece of st.pieces.slice(0, st.pieces.length - 1)) {
+        const cells = piece.solutionCells;
+        const key = window.Puzzle.shapeKey(window.Puzzle.normalize(cells));
+        piece.cells = window.Puzzle.orientations(piece.cells).find((f) => window.Puzzle.shapeKey(f) === key);
+        S.place(piece, Math.min.apply(null, cells.map((c) => c[0])), Math.min.apply(null, cells.map((c) => c[1])));
+      }
+    });
+    await phone.waitForTimeout(1800);   // ここが「かかった時間」になる
+    const cleared = await phone.evaluate(() => {
+      const S = window.__sikitsume;
+      const st = S.state();
+      const piece = st.pieces.find((q) => !q.placed);
+      const cells = piece.solutionCells;
+      const key = window.Puzzle.shapeKey(window.Puzzle.normalize(cells));
+      piece.cells = window.Puzzle.orientations(piece.cells).find((f) => window.Puzzle.shapeKey(f) === key);
+      const cell = S.cellSize();
+      const board = document.getElementById('board').getBoundingClientRect();
+      const gx = Math.min.apply(null, cells.map((c) => c[0]));
+      const gy = Math.min.apply(null, cells.map((c) => c[1]));
+      const el = document.querySelector(`#tray .piece[data-id="${piece.id}"] i`);
+      const from = el.getBoundingClientRect();
+      const c0 = piece.cells[0];
+      const ev = (t, x, y, n) => n.dispatchEvent(new PointerEvent(t, { bubbles: true, cancelable: true,
+        clientX: x, clientY: y, pointerId: 1, pointerType: 'touch', button: 0, isPrimary: true }));
+      const tx = board.left + (gx + c0[0] + 0.5) * cell;
+      const ty = board.top + (gy + c0[1] + 0.5) * cell + cell * 1.1;
+      ev('pointerdown', from.left + from.width / 2, from.top + from.height / 2, el);
+      ev('pointermove', from.left + 20, from.top - 20, window);
+      ev('pointermove', tx, ty, window);
+      ev('pointerup', tx, ty, window);
+      return {
+        won: S.state().won,
+        elapsed: S.state().elapsed,
+        hints: S.state().hints,
+        shown: document.getElementById('winTime').textContent,
+        best: JSON.parse(localStorage.getItem('sikitsume.best.v1') || '{}').practice
+      };
+    });
+    ok(cleared.won, '最後の 1 つを置くとクリアになる');
+    ok(cleared.elapsed >= 1.5, `かかった時間が記録される (${(cleared.elapsed || 0).toFixed(1)} 秒)`);
+    ok(cleared.shown !== '0:00', `クリア画面のタイムが 0:00 でない (${cleared.shown})`);
+    ok(cleared.best >= 1.5, `ベストに正しい時間が残る (${cleared.best})`);
+    await phone.evaluate(() => { document.getElementById('btnStay').click(); });
+
     // ------------------------------------------------ アイコン
     section('アイコン');
     const desk = await browser.newPage();
